@@ -25,7 +25,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/galt-tr/bsv-anchors"
+    "url": "https://github.com/connormurray2/bsv-anchors"
   },
   "dependencies": {
     "better-sqlite3": "^11.0.0",
