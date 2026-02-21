@@ -31,7 +31,8 @@ describe('AnchorStore', () => {
     
     it('should generate a public key', () => {
       const publicKey = store.getPublicKey();
-      expect(publicKey).toMatch(/^[0-9a-f]{64}$/);
+      // secp256k1 compressed public key: 33 bytes (66 hex chars)
+      expect(publicKey).toMatch(/^0[23][0-9a-f]{64}$/);
     });
     
     it('should persist key across reopens', async () => {

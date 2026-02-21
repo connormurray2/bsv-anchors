@@ -1,34 +1,40 @@
 /**
  * bsv-anchors - Cryptographic Signing
  * 
- * Ed25519 signatures for commitment authentication.
+ * secp256k1 signatures for commitment authentication.
+ * Uses the same curve as BSV for consistency across the stack.
  */
 
-import * as ed from '@noble/ed25519';
-import { sha512 } from '@noble/hashes/sha512';
+import * as secp from '@noble/secp256k1';
+import { sha256 } from '@noble/hashes/sha256';
+import { hmac } from '@noble/hashes/hmac';
 import { bytesToHex, hexToBytes, utf8ToBytes } from '@noble/hashes/utils';
 import { randomBytes } from 'crypto';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 
-// Configure ed25519 to use sha512
-ed.etc.sha512Sync = (...m) => sha512(ed.etc.concatBytes(...m));
+// Configure secp256k1 to use our HMAC-SHA256 implementation
+secp.etc.hmacSha256Sync = (k: Uint8Array, ...m: Uint8Array[]): Uint8Array => {
+  const h = hmac.create(sha256, k);
+  for (const msg of m) h.update(msg);
+  return h.digest();
+};
 
 // ============================================================================
 // Key Management
 // ============================================================================
 
 export interface KeyPair {
-  privateKey: string;  // hex
-  publicKey: string;   // hex
+  privateKey: string;  // hex (32 bytes)
+  publicKey: string;   // hex (33 bytes compressed)
 }
 
 /**
- * Generate a new Ed25519 key pair.
+ * Generate a new secp256k1 key pair.
  */
 export function generateKeyPair(): KeyPair {
-  const privateKey = randomBytes(32);
-  const publicKey = ed.getPublicKey(privateKey);
+  const privateKey = secp.utils.randomPrivateKey();
+  const publicKey = secp.getPublicKey(privateKey, true); // compressed
   
   return {
     privateKey: bytesToHex(privateKey),
@@ -41,7 +47,7 @@ export function generateKeyPair(): KeyPair {
  */
 export function getPublicKey(privateKeyHex: string): string {
   const privateKey = hexToBytes(privateKeyHex);
-  const publicKey = ed.getPublicKey(privateKey);
+  const publicKey = secp.getPublicKey(privateKey, true); // compressed
   return bytesToHex(publicKey);
 }
 
@@ -50,17 +56,26 @@ export function getPublicKey(privateKeyHex: string): string {
 // ============================================================================
 
 /**
- * Sign a message with Ed25519.
+ * Hash message for signing (double SHA256 like BSV).
  */
-export function sign(message: string | Uint8Array, privateKeyHex: string): string {
+function hashMessage(message: string | Uint8Array): Uint8Array {
   const messageBytes = typeof message === 'string' ? utf8ToBytes(message) : message;
-  const privateKey = hexToBytes(privateKeyHex);
-  const signature = ed.sign(messageBytes, privateKey);
-  return bytesToHex(signature);
+  return sha256(sha256(messageBytes));
 }
 
 /**
- * Verify an Ed25519 signature.
+ * Sign a message with secp256k1.
+ * Returns compact signature (64 bytes) as hex.
+ */
+export function sign(message: string | Uint8Array, privateKeyHex: string): string {
+  const msgHash = hashMessage(message);
+  const privateKey = hexToBytes(privateKeyHex);
+  const signature = secp.sign(msgHash, privateKey);
+  return signature.toCompactHex();
+}
+
+/**
+ * Verify a secp256k1 signature.
  */
 export function verify(
   message: string | Uint8Array, 
@@ -68,10 +83,10 @@ export function verify(
   publicKeyHex: string
 ): boolean {
   try {
-    const messageBytes = typeof message === 'string' ? utf8ToBytes(message) : message;
-    const signature = hexToBytes(signatureHex);
+    const msgHash = hashMessage(message);
+    const signature = secp.Signature.fromCompact(signatureHex);
     const publicKey = hexToBytes(publicKeyHex);
-    return ed.verify(signature, messageBytes, publicKey);
+    return secp.verify(signature, msgHash, publicKey);
   } catch {
     return false;
   }
@@ -81,16 +96,17 @@ export function verify(
 // Key Storage
 // ============================================================================
 
-const KEY_FILE = 'signing-key.json';
+const KEY_FILE = 'identity-key.json';
 
 export interface StoredKey {
   privateKey: string;
   publicKey: string;
   createdAt: string;
+  keyType: 'secp256k1';
 }
 
 /**
- * Load or create signing key from data directory.
+ * Load or create identity key from data directory.
  */
 export function loadOrCreateKey(dataDir: string): KeyPair {
   const keyPath = join(dataDir, KEY_FILE);
@@ -113,6 +129,7 @@ export function loadOrCreateKey(dataDir: string): KeyPair {
   const stored: StoredKey = {
     ...keyPair,
     createdAt: new Date().toISOString(),
+    keyType: 'secp256k1',
   };
   writeFileSync(keyPath, JSON.stringify(stored, null, 2), { mode: 0o600 });
   
@@ -120,7 +137,7 @@ export function loadOrCreateKey(dataDir: string): KeyPair {
 }
 
 /**
- * Check if signing key exists.
+ * Check if identity key exists.
  */
 export function keyExists(dataDir: string): boolean {
   return existsSync(join(dataDir, KEY_FILE));

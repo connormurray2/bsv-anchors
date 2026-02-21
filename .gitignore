@@ -1,6 +1,35 @@
+# Dependencies
 node_modules/
+
+# Build output
 dist/
+
+# Data files
+*.db
+*.db-journal
+data/
+
+# Keys (never commit)
+*-key.json
+*.pem
+
+# Logs
 *.log
+logs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Test coverage
 coverage/
-.vite/
+
+# Environment
+.env
+.env.local
