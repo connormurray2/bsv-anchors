@@ -4,7 +4,7 @@
  * Handles incoming proof requests and manages proof exchange.
  */
 
-import type { AnchorStore } from '../store/anchor-store.js';
+import { AnchorStore } from '../store/anchor-store.js';
 import type { CommitmentProof, CommitmentQuery } from '../types.js';
 import {
   PROTOCOL_ID,
@@ -349,6 +349,3 @@ export class ProofHandler {
     }
   }
 }
-
-// Import for verification
-import { AnchorStore } from '../store/anchor-store.js';
